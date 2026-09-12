@@ -50,6 +50,7 @@ def _pct(part, whole) -> str:
     return "%.1f%%" % (100.0 * part / whole) if whole else "0.0%"
 
 
+# ---------------------------------------------------------------- обзор
 MEDIA_NAMES = {"photo": "фото", "voice": "голосовые", "audio": "аудио",
                "video": "видео", "video_note": "кружки", "document": "файлы",
                "sticker": "стикеры", "mixed": "альбомы"}
@@ -129,6 +130,7 @@ async def cb_home(call: CallbackQuery, storage, teacher, autolearner, **_):
     await show(call, overview_text(storage, teacher, autolearner))
 
 
+# ---------------------------------------------------------------- активность
 @router.callback_query(F.data == "a:act")
 async def cb_activity(call: CallbackQuery, storage, **_):
     rows = storage.activity(7)
@@ -149,6 +151,7 @@ async def cb_activity(call: CallbackQuery, storage, **_):
     await show(call, "\n".join(lines), BACK_KB)
 
 
+# ---------------------------------------------------------------- пользователи
 @router.callback_query(F.data == "a:users")
 async def cb_users(call: CallbackQuery, storage, **_):
     top = storage.top_users(10)
@@ -193,6 +196,7 @@ async def _switch_block(message: Message, storage, blocked: bool) -> None:
                          (user_id, "заблокирован 🚫" if blocked else "разблокирован ✅"))
 
 
+# ---------------------------------------------------------------- база знаний
 def kb_view(storage) -> str:
     d = storage.overview()
     top = storage.knowledge_top(7)
@@ -289,6 +293,7 @@ async def cb_kb_wipe_yes(call: CallbackQuery, storage, **_):
                % (count, kb_view(storage)), KB_KB)
 
 
+# ---------------------------------------------------------------- состояние
 @router.callback_query(F.data == "a:health")
 async def cb_health(call: CallbackQuery, storage, teacher, autolearner, **_):
     ok, detail = await teacher.health()
@@ -297,7 +302,7 @@ async def cb_health(call: CallbackQuery, storage, teacher, autolearner, **_):
         "<b>🩺 Состояние системы</b>", "",
         "Учитель: <b>%s</b>" % html.escape(teacher.title),
         "Статус: %s — %s" % ("✅ на связи" if ok else "❌ недоступен", html.escape(detail)),
-        "Режим: <code>%s</code>" % html.escape(getattr(teacher, "name", "web")),
+        "Режим: <code>%s</code>" % config.TEACHER,
         "Аптайм: %s" % human_time(time.time() - storage.started_at),
         "Самообучение: %s" % ("работает" if autolearner and autolearner.running
                               and storage.flag("autolearn", False) else "выключено"),
@@ -315,6 +320,7 @@ async def cb_health(call: CallbackQuery, storage, teacher, autolearner, **_):
     await show(call, "\n".join(lines), BACK_KB)
 
 
+# ---------------------------------------------------------------- настройки
 def cfg_view(storage) -> str:
     return (
         "<b>⚙️ Настройки ИИ</b>\n\n"
@@ -332,7 +338,6 @@ def cfg_view(storage) -> str:
 
 
 CFG_KB = kb([
-    [("♊ Gemini", "a:provider:gemini"), ("🤖 ChatGPT", "a:provider:chatgpt")],
     [("🔁 Обучение", "a:cfg:learning"), ("🔁 Своя память", "a:cfg:brain_first")],
     [("🔁 Самообучение", "a:cfg:autolearn")],
     [("➖ порог", "a:cfg:th:-"), ("➕ порог", "a:cfg:th:+")],
@@ -341,8 +346,7 @@ CFG_KB = kb([
 
 
 @router.callback_query(F.data == "a:cfg")
-async def cb_cfg(call: CallbackQuery, state: FSMContext, storage, **_):
-    await state.clear()
+async def cb_cfg(call: CallbackQuery, storage, **_):
     await show(call, cfg_view(storage), CFG_KB)
 
 
@@ -359,6 +363,7 @@ async def cb_cfg_change(call: CallbackQuery, storage, autolearner, **_):
     await show(call, cfg_view(storage), CFG_KB)
 
 
+# ---------------------------------------------------------------- рассылка
 @router.callback_query(F.data == "a:cast")
 async def cb_cast(call: CallbackQuery, state: FSMContext, storage, **_):
     await state.set_state(Admin.broadcast)

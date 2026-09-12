@@ -31,23 +31,27 @@ TOO_BIG = ("😕 Файл больше %d МБ — Telegram не отдаёт т
 UNSUPPORTED = "😕 Такой формат я прочитать не смогу. Опиши словами, что нужно."
 NOT_MEDIA = "Я понимаю текст, фото, голосовые, видео и файлы. Пришли что-нибудь из этого."
 
+# буфер альбомов: media_group_id -> {"items": [...], "timer": Task}
 _albums: Dict[str, dict] = {}
 
 
 async def _keep_typing(message: Message) -> None:
+    """Держим статус «печатает», пока идёт долгий поход к учителю."""
     while True:
         with contextlib.suppress(Exception):
             await message.bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await asyncio.sleep(4)
 
 
+# ---------------------------------------------------------------- разбор вложений
 def describe_attachment(message: Message) -> Optional[Tuple[str, str, str, str, int]]:
+    """Достаёт из сообщения (file_id, вид, имя, mime, размер)."""
     if message.photo:
         photo = message.photo[-1]
         return photo.file_id, "photo", "photo.jpg", "image/jpeg", photo.file_size or 0
     if message.sticker:
         st = message.sticker
-        if st.is_animated:
+        if st.is_animated:  # .tgs — это векторная анимация, Gemini её не читает
             return None
         if st.is_video:
             return st.file_id, "sticker", "sticker.webm", "video/webm", st.file_size or 0
@@ -89,6 +93,7 @@ async def _download(bot: Bot, message: Message, box: MediaBox) -> Optional[Media
     return MediaItem(path, guess_mime(name, mime), kind, name, size)
 
 
+# ---------------------------------------------------------------- общий ответ
 async def _answer(message: Message, storage, brain,
                   media: List[MediaItem], caption: str) -> None:
     user = message.from_user
@@ -111,11 +116,12 @@ async def _answer(message: Message, storage, brain,
     for chunk in to_telegram(result.text):
         try:
             await message.answer(chunk, disable_web_page_preview=True)
-        except Exception as exc:
+        except Exception as exc:  # разметка не зашла — шлём как есть
             log.warning("Ошибка отправки: %s", exc)
             await message.answer(chunk, parse_mode=None, disable_web_page_preview=True)
 
 
+# ---------------------------------------------------------------- команды
 @router.message(CommandStart())
 async def on_start(message: Message, storage, **_) -> None:
     storage.upsert_user(message.from_user)
@@ -135,6 +141,7 @@ async def on_clear(message: Message, storage, **_) -> None:
         await message.answer("Контекст и так пуст — можем начинать с чистого листа.")
 
 
+# ---------------------------------------------------------------- текст
 @router.message(F.text & ~F.text.startswith("/"))
 async def on_text(message: Message, storage, brain, **_) -> None:
     storage.upsert_user(message.from_user)
@@ -151,6 +158,7 @@ async def on_text(message: Message, storage, brain, **_) -> None:
     await _answer(message, storage, brain, [], text)
 
 
+# ---------------------------------------------------------------- медиа
 MEDIA_FILTER = (
     F.photo | F.voice | F.audio | F.video | F.video_note
     | F.document | F.animation | F.sticker
@@ -192,6 +200,7 @@ async def on_media(message: Message, storage, brain, **_) -> None:
 
 
 async def _collect_album(message: Message, storage, brain) -> None:
+    """Несколько файлов одним сообщением приходят по одному — собираем их вместе."""
     group = message.media_group_id
     album = _albums.setdefault(group, {"items": [], "timer": None})
     album["items"].append(message)
@@ -205,7 +214,7 @@ async def _flush_album(group: str, storage, brain) -> None:
     try:
         await asyncio.sleep(config.ALBUM_WAIT)
     except asyncio.CancelledError:
-        return
+        return  # пришёл ещё файл — ждём заново
 
     album = _albums.pop(group, None)
     if not album or not album["items"]:
@@ -239,6 +248,7 @@ async def _flush_album(group: str, storage, brain) -> None:
         box.cleanup()
 
 
+# ---------------------------------------------------------------- остальное
 @router.message()
 async def on_other(message: Message, storage, **_) -> None:
     storage.upsert_user(message.from_user)

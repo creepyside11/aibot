@@ -1,4 +1,4 @@
-"""Точка входа: Telegram-ИИ с памятью и веб-учителями Gemini/ChatGPT."""
+"""Точка входа: собственный ИИ, который учится в чате Gemini и живёт в Telegram."""
 from __future__ import annotations
 
 import asyncio
@@ -20,7 +20,7 @@ from ai.media import sweep
 from ai.providers import build_teacher
 from ai.providers.base import TeacherError
 from ai.storage import Storage
-from tgbot import admin_provider, handlers_admin, handlers_user
+from tgbot import handlers_admin, handlers_user
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,7 +60,7 @@ async def main() -> None:
 
     sweep(config.MEDIA_DIR)  # чистим хвосты, если прошлый запуск оборвался
     storage = Storage(config.DB_PATH, config.SIM_THRESHOLD)
-    teacher = build_teacher(config, storage)
+    teacher = build_teacher(config)
     brain = Brain(storage, teacher, config.CONTEXT_TURNS)
     autolearner = AutoLearner(brain)
 
@@ -74,7 +74,6 @@ async def main() -> None:
     dp["brain"] = brain
     dp["teacher"] = teacher
     dp["autolearner"] = autolearner
-    dp.include_router(admin_provider.router)
     dp.include_router(handlers_admin.router)
     dp.include_router(handlers_user.router)
 

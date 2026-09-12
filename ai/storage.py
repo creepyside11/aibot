@@ -95,7 +95,6 @@ DEFAULT_SETTINGS = {
     "learning": "1",      # запоминать ответы учителя
     "brain_first": "1",   # сначала искать ответ в своей памяти
     "autolearn": "0",     # самостоятельное дообучение в фоне
-    "provider": "gemini", # активный веб-учитель: gemini | chatgpt
     "threshold": None,    # None -> берём из config при первом запуске
 }
 

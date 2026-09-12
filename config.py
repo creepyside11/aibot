@@ -42,20 +42,18 @@ BOT_NAME = (os.getenv("BOT_NAME") or "Нейро").strip()
 # ---------- Хранилище ----------
 DB_PATH = DATA_DIR / (os.getenv("DB_NAME") or "brain.db")
 
-# ---------- Веб-учителя ----------
-# Провайдер (gemini/chatgpt) хранится в SQLite и меняется из /admin.
-# Cookies хранятся отдельно в data/provider_sessions.json.
-SESSION_STORE_PATH = DATA_DIR / "provider_sessions.json"
-WEB_HEADLESS = _bool("WEB_HEADLESS", True)
-WEB_NEW_CHAT = _bool("WEB_NEW_CHAT", True)
+# ---------- Учитель ----------
+TEACHER = (os.getenv("TEACHER") or "web").strip().lower()
 
 GEMINI_WEB_URL = (os.getenv("GEMINI_WEB_URL") or "https://gemini.google.com/app").strip()
+GEMINI_WEB_HEADLESS = _bool("GEMINI_WEB_HEADLESS", False)
 GEMINI_WEB_TIMEOUT = _int("GEMINI_WEB_TIMEOUT", 180)
+GEMINI_WEB_NEW_CHAT = _bool("GEMINI_WEB_NEW_CHAT", True)
 GEMINI_PROFILE_DIR = DATA_DIR / "gemini_profile"
 
-CHATGPT_WEB_URL = (os.getenv("CHATGPT_WEB_URL") or "https://chatgpt.com/").strip()
-CHATGPT_WEB_TIMEOUT = _int("CHATGPT_WEB_TIMEOUT", 180)
-CHATGPT_PROFILE_DIR = DATA_DIR / "chatgpt_profile"
+GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY") or "").strip()
+GEMINI_MODEL = (os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip()
+GEMINI_API_TIMEOUT = _int("GEMINI_API_TIMEOUT", 120)
 
 # ---------- Мозг ----------
 SIM_THRESHOLD = _float("SIM_THRESHOLD", 0.88)
