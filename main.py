@@ -18,8 +18,8 @@ from ai.autolearn import AutoLearner
 from ai.brain import Brain
 from ai.media import sweep
 from ai.providers import build_teacher
-from ai.providers.base import TeacherError
-from ai.storage import Storage
+from ai.storage import Storage as SQLiteStorage
+from ai.storage_pg import PostgresStorage
 from tgbot import handlers_admin, handlers_user
 
 logging.basicConfig(
@@ -56,10 +56,15 @@ def make_alerter(bot: Bot):
 
 async def main() -> None:
     if not config.BOT_TOKEN:
-        sys.exit("Не задан BOT_TOKEN в .env")
+        sys.exit("Не задана переменная окружения BOT_TOKEN")
 
-    sweep(config.MEDIA_DIR)  # чистим хвосты, если прошлый запуск оборвался
-    storage = Storage(config.DB_PATH, config.SIM_THRESHOLD)
+    sweep(config.MEDIA_DIR)
+    if config.DATABASE_URL:
+        storage = PostgresStorage(
+            config.DATABASE_URL, config.SIM_THRESHOLD, schema=config.AIBOT_DB_SCHEMA
+        )
+    else:
+        storage = SQLiteStorage(config.DB_PATH, config.SIM_THRESHOLD)
     teacher = build_teacher(config)
     brain = Brain(storage, teacher, config.CONTEXT_TURNS)
     autolearner = AutoLearner(brain)
@@ -67,8 +72,6 @@ async def main() -> None:
     bot = Bot(config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     brain.on_alert = make_alerter(bot)
 
-    # storage в конструкторе — это FSM-хранилище aiogram, поэтому свои
-    # объекты кладём в workflow_data: они прилетят в хендлеры как аргументы
     dp = Dispatcher(storage=MemoryStorage())
     dp["storage"] = storage
     dp["brain"] = brain
@@ -79,6 +82,10 @@ async def main() -> None:
 
     me = await bot.get_me()
     log.info("Бот @%s запущен, админ: %s", me.username, config.ADMIN_ID)
+    log.info("Хранилище: %s%s", getattr(storage, "backend", "sqlite"),
+             " schema=" + storage.schema if getattr(storage, "is_postgres", False) else "")
+    if config.REMOTE_BROWSER_URL and config.TEACHER == "web":
+        log.info("Удалённый браузер для входа: %s", config.REMOTE_BROWSER_URL)
 
     await bot.set_my_commands(USER_COMMANDS, scope=BotCommandScopeAllPrivateChats())
     if config.ADMIN_ID:
@@ -96,11 +103,15 @@ async def main() -> None:
         log.error("Учитель не поднялся: %s", exc)
         if config.ADMIN_ID:
             with contextlib.suppress(Exception):
+                hint = ""
+                if config.REMOTE_BROWSER_URL and config.TEACHER == "web":
+                    hint = "\n\nОткрой удалённый Chrome и войди в Google:\n%s" % config.REMOTE_BROWSER_URL
                 await bot.send_message(
                     config.ADMIN_ID,
-                    "🚨 Источник знаний не запустился:\n<code>%s</code>\n\n"
-                    "Бот работает, но отвечать сможет только из уже выученного."
-                    % str(exc)[:500],
+                    "🚨 Источник знаний не запустился:\n<code>%s</code>%s\n\n"
+                    "Бот продолжит работать и после ручного входа сможет снова использовать Gemini."
+                    % (str(exc)[:500], hint),
+                    disable_web_page_preview=True,
                 )
 
     if storage.flag("autolearn", False):
